@@ -33,13 +33,13 @@ exports.localFileUpload = async (req, res) => {
     await file.mv(filePath);
 
     // 5. Success Message
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "File Uploaded Successfully",
     });
   } catch (err) {
     console.log(err);
-    res.status(400).json({
+    return res.status(400).json({
       success: false,
       message: "File Uploaded Failed",
     });
@@ -108,7 +108,7 @@ exports.uploadImageUrl = async (req, res) => {
     });
 
     const dbResponse = await newFile.save();
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       data: dbResponse,
       Url: cloudinaryResponse?.secure_url,

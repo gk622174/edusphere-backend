@@ -5,6 +5,77 @@ const hashingPassword = require("../utiles/hashingPassword");
 const crypto = require("crypto");
 const mailsender = require("../utiles/mailSender");
 
+/**
+ * ===================== PASSWORD RESET FLOW (Production-Ready) =====================
+ *
+ * 1️. User requests password reset by providing their email address.
+ *
+ * 2️. Backend validates:
+ *     - Email field is filled
+ *     - Email format is valid
+ *     - User exists in DB
+ *
+ * 3️. Backend generates a unique token:
+ *     - Use `crypto.randomUUID()` (secure & random)
+ *     - Save token and expiry time in DB (Example: 5 minutes validity)
+ *
+ * 4️. Backend creates a password reset link:
+ *     - Example: `${frontendBaseUrl}/change-password/${token}`
+ *
+ * 5️. Backend sends an HTML email:
+ *     - Includes reset link
+ *     - Mentions expiry time
+ *     - Styled professionally for production
+ *
+ * 6️. If email fails to send:
+ *     - Remove token & expiry from DB (cleanup)
+ *     - Log warning with email & token for debugging
+ *
+ * 7️. If email is sent successfully:
+ *     - Send success JSON response: "Password reset email sent successfully"
+ *
+ * ====================================================================================
+ *
+ * 8️. User clicks link in email:
+ *     - Frontend takes token from URL
+ *     - Displays "Change Password" form
+ *
+ * 9️. User enters:
+ *     - New password
+ *     - Confirm password
+ *     - Token (hidden field from URL)
+ *
+ * . Backend validates:
+ *     - All fields filled
+ *     - New password strong enough (uppercase, lowercase, number, special char)
+ *     - New password matches confirm password
+ *
+ * 1️1️. Backend checks token in DB:
+ *     - Token exists
+ *     - Token expiry time > current time
+ *     - If invalid/expired → clear token from DB and return error
+ *
+ * 1️2️. Backend hashes new password:
+ *     - Use bcrypt or argon2 for hashing
+ *
+ * 1️3️. Backend updates:
+ *     - Save hashed password in DB
+ *     - Remove token & expiry from DB
+ *
+ * 1️4️. Backend sends success response:
+ *     - "Password changed successfully, please log in again"
+ *
+ * ====================================================================================
+ *
+ *  SECURITY TIPS FOR PRODUCTION:
+ *     - Always use HTTPS for reset link
+ *     - Use strong token generation (`crypto.randomUUID()` or `crypto.randomBytes`)
+ *     - Expire tokens quickly (5-15 mins)
+ *     - Remove token from DB after successful password reset
+ *     - Log important events (mail fail, token invalid) for debugging
+ *     - Never log full passwords or tokens in production
+ */
+
 exports.resetPasswordToken = async (req, res) => {
   try {
     // 1. Fetching Data From Req Body
@@ -37,7 +108,7 @@ exports.resetPasswordToken = async (req, res) => {
     const token = crypto.randomUUID();
 
     // 6. Updtae Token And Expire In User
-    await User.findOneAndUpdate(
+    const userDetail = await User.findOneAndUpdate(
       { email },
       { token: token, resetPasswordExpires: Date.now() + 5 * 60 * 1000 },
       { new: true }
@@ -103,6 +174,11 @@ exports.resetPasswordToken = async (req, res) => {
     );
 
     if (!sentMail) {
+      await User.findOneAndUpdate(
+        { email },
+        { token: null, resetPasswordExpires: null }
+      );
+      console.warn(`Password reset mail failed for user: ${email}`);
       return res.status(500).json({
         success: false,
         message:
@@ -110,14 +186,14 @@ exports.resetPasswordToken = async (req, res) => {
       });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message:
         "Password reset email sent successfully. Please check your inbox.",
     });
   } catch (error) {
     console.log("Error while sending reset password email:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "An error occurred while processing your request.",
     });
@@ -140,7 +216,8 @@ exports.resetPassword = async (req, res) => {
     if (!isStrongPassword(newPassword)) {
       return res.status(400).json({
         success: false,
-        message: "Please entry strong password",
+        message:
+          "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.",
       });
     }
 
@@ -148,7 +225,7 @@ exports.resetPassword = async (req, res) => {
     if (newPassword !== confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: " New password and confirm Password not matched",
+        message: "New password and confirm password do not match",
       });
     }
 
@@ -161,33 +238,27 @@ exports.resetPassword = async (req, res) => {
     if (!user) {
       return res.status(400).json({
         success: false,
-        message: "User not found",
+        message: "Invalid or expired password reset link",
       });
     }
 
-    if (user.resetPasswordExpires < Date.now()) {
-      return res.status(400).json({
-        success: false,
-        message: "Link is expire send again for password reset",
-      });
-    }
-
-    // 5. Hashing "newPassword"
-    const hasedPassword = await hashingPassword(newPassword);
-    user.password = hasedPassword;
+    // 6. Hashing "newPassword"
+    const hashedPassword = await hashingPassword(newPassword);
+    user.password = hashedPassword;
     user.token = null;
     user.resetPasswordExpires = null;
 
-    // 6. Save New User
+    // 7. Save New User
     await user.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Password change successfully",
+      message:
+        "Your password has been changed successfully. Please login again.",
     });
   } catch (error) {
     console.log("Error when reset password", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Password reset Failed",
     });

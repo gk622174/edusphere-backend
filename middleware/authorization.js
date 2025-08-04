@@ -25,7 +25,7 @@ exports.authorization = async (req, res, next) => {
     } catch (err) {
       console.log(err);
       console.error(err);
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         message: "Token Verificattion Failed",
       });

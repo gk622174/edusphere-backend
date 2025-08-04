@@ -1,5 +1,5 @@
 const { redisClient } = require("../config/redisClient");
-const mailSender = require("../utiles/mailsender");
+const mailSender = require("../utiles/mailSender");
 const User = require("../models/user");
 const isValidEmail = require("../utiles/emailValidator");
 
@@ -50,7 +50,7 @@ const isValidEmail = require("../utiles/emailValidator");
  *    - Return **500 Internal Server Error**
  */
 
-exports.sendMail = async (req, res) => {
+exports.otpMail = async (req, res) => {
   try {
     // 1. Fetching data from request body
     const { firstName = "", lastName = "", email } = req.body;
@@ -81,7 +81,7 @@ exports.sendMail = async (req, res) => {
 
     // 5. Check if OTP already exists in Redis
     let otp = await redisClient.get(`otp:${email}`);
-
+    let emailSent;
     if (!otp) {
       //  Generate new OTP
       otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -90,7 +90,7 @@ exports.sendMail = async (req, res) => {
       await redisClient.setEx(`otp:${email}`, 300, otp);
 
       //  Send OTP email
-      const emailSent = await mailSender(
+      emailSent = await mailSender(
         email,
         "EduSphere - Email Verification",
         `
@@ -128,13 +128,13 @@ exports.sendMail = async (req, res) => {
     }
 
     // 6. Success response
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "OTP sent successfully",
     });
   } catch (err) {
     console.error("Error sending email or generating OTP:", err);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Internal server error while sending OTP",
     });

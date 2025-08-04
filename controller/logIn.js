@@ -148,3 +148,89 @@ exports.logIn = async (req, res) => {
     });
   }
 };
+
+// google login
+exports.googleLogIn = async (email, res, password) => {
+  try {
+    // 1. check Email,Password Existed
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
+    }
+
+    let user;
+    // 1. Check If User Data Is Cached In Redis
+    const redisUser = await redisClient.get(`user:${email}`);
+    if (redisUser) {
+      user = JSON.parse(redisUser);
+      console.log("Redis Hit - Mongoose Miss");
+    } else {
+      user = await User.findOne({ email });
+      console.log("Mongoose Hit - Redis Miss");
+      if (user) {
+        user = user.toObject();
+        await redisClient.setEx(`user:${email}`, 600, JSON.stringify(user));
+      }
+    }
+
+    // 2. If user doesn't exist
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        data: null,
+        message: "User Not Found, Please Signup",
+      });
+    }
+
+    // 3. Compare password with hashed password
+    const isPasswordMatch = await bcrypt.compare(password, user.password);
+    if (!isPasswordMatch) {
+      return res.status(401).json({
+        success: false,
+        data: null,
+        message: "Wrong Password",
+      });
+    }
+
+    // 4. Create JWT payload
+    const payload = {
+      id: user._id,
+      email: user.email,
+      accountType: user.accountType,
+    };
+
+    // 5. Sign token with payload and secret
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      expiresIn: process.env.JWT_EXPIRE,
+    });
+
+    // 6. Inserting token in user
+    user.token = token;
+    // 7. Undefine password for security
+    user.password = undefined;
+
+    // 8. Create option for cookie
+    const option = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      expires: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000),
+    };
+
+    return res.cookie("token", token, option).status(200).json({
+      success: true,
+      data: user,
+      message: "Google login Successful",
+      token: token,
+    });
+  } catch (err) {
+    console.error("Google login Error:", err);
+    return res.status(500).json({
+      success: false,
+      data: null,
+      message: "Something went wrong, please try again later.",
+    });
+  }
+};

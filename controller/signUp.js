@@ -4,6 +4,10 @@ const Profile = require("../models/profile");
 const hashingPassword = require("../utiles/hashingPassword");
 const isValidEmail = require("../utiles/emailValidator");
 const isStrongPassword = require("../utiles/passwordChecker");
+const passwordGenerator = require("../utiles/passwordGenerator");
+const mailSender = require("../utiles/mailSender");
+const { googleLogIn } = require("../controller/logIn");
+const { response } = require("express");
 
 /**
  * =========================================
@@ -174,23 +178,146 @@ exports.signUp = async (req, res) => {
     });
 
     // 13. Save user
-    let response = await newUser.save();
-
+    let createUser = await newUser.save();
     // 14. Remove password from response
-    if (response) {
-      response = response.toObject();
+    let response;
+    if (!createUser) {
+      response = await User.findById(createUser._id).populate();
       response.password = undefined;
     }
 
     // 15. Success response
-    res.status(201).json({
+    return res.status(201).json({
       success: true,
       data: response,
       message: "Signup successful",
     });
   } catch (err) {
     console.error("Signup Error:", err.message);
-    res.status(500).json({
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error during signup",
+    });
+  }
+};
+
+// This is for Google signUp
+exports.googleSignup = async (req, res) => {
+  try {
+    //  1. Fetching Data From Req Body
+    const { firstName, lastName, email, accountType } = req.body;
+
+    // 2. Required fields check
+    if (!firstName || !lastName || !email) {
+      return res.status(400).json({
+        success: false,
+        message: "Please fill all the required",
+      });
+    }
+
+    // 7. Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return googleLogIn(email, res, existingUser.password);
+    }
+
+    let password = passwordGenerator();
+    if (!password) {
+      return res.status(500).json({
+        success: false,
+        message: "Google signup failed to generate password",
+      });
+    }
+
+    // 10. Password hashing
+    const hashedPassword = await hashingPassword(password);
+    if (!hashedPassword) {
+      return res.status(500).json({
+        success: false,
+        message: "Password hashing failed",
+      });
+    }
+
+    // 11. Create default profile
+    const profileDetail = await Profile.create({
+      gender: null,
+      dateOfBirth: null,
+      image: `https://api.dicebear.com/7.x/initials/svg?seed=${firstName} ${lastName}`,
+      about: null,
+      contactNo: null,
+      profession: null,
+    });
+
+    // 12. Create new user
+    const newUser = new User({
+      firstName,
+      lastName,
+      email,
+      password: hashedPassword,
+      accountType,
+      additionalDetails: profileDetail._id,
+    });
+
+    // 13. Save user
+    let response = await newUser.save();
+
+    const sentEmail = await mailSender(
+      email,
+      "EduSphere - Your Account Has Been Created Successfully",
+      `
+  <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 30px; text-align: center;">
+    <div style="max-width: 550px; margin: auto; background: white; border-radius: 14px; padding: 35px 25px; box-shadow: 0px 6px 18px rgba(0,0,0,0.08);">
+      
+      <div style="margin-bottom: 15px;">
+        <img src="https://res.cloudinary.com/dglgmkgt4/image/upload/v1754124919/eduSphere_fu67gz.png" alt="EduSphere Logo" style="width: 80px;">
+      </div>
+
+      <h1 style="color: #2e7dff; margin-bottom: 10px;">Welcome to EduSphere 🎓</h1>
+
+      <p style="font-size: 15px; color: #555; line-height: 1.6;">
+        Hi <strong>${firstName} ${lastName}</strong>,<br>
+        Your EduSphere account has been created successfully via Google Sign‑Up.
+      </p>
+
+      <div style="background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 20px 0; font-size: 18px; font-weight: bold; letter-spacing: 1px; color: #111;">
+        Temporary Password: <span style="color: #2e7dff;">${password}</span>
+      </div>
+
+      <p style="color: #555; font-size: 14px;">
+        Please use this password to login and change it immediately for security purposes.
+      </p>
+
+      <a href="${process.env.FRONTEND_URL}/login" 
+        style="display: inline-block; background: linear-gradient(135deg, #2e7dff, #1b5dd8); 
+        color: white; padding: 12px 28px; margin-top: 20px; border-radius: 8px; 
+        text-decoration: none; font-weight: bold; font-size: 15px;">
+        Login to EduSphere
+      </a>
+
+      <p style="font-size: 12px; color: #888; margin-top: 20px;">
+        If you did not sign up for EduSphere, please ignore this email.
+      </p>
+    </div>
+
+    <p style="font-size: 11px; color: #aaa; margin-top: 20px;">
+      © ${new Date().getFullYear()} EduSphere. All rights reserved.
+    </p>
+  </div>
+  `
+    );
+
+    if (!sentEmail) {
+      await User.findByIdAndDelete(response._id);
+      return res.status(500).json({
+        success: false,
+        message: "Fail to send google signup mail ",
+      });
+    }
+
+    googleLogIn(email, res, response.password);
+  } catch (error) {
+    console.log("Error when google signup", error);
+    return res.status(500).json({
       success: false,
       message: "Internal server error during signup",
     });

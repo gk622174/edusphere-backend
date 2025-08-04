@@ -5,7 +5,7 @@ const dotenv = require("dotenv");
 const router = require("./routes/route");
 const dbConnect = require("./config/dataBase");
 const cloudinaryConnect = require("./config/cloudinary");
-const { connectRedis } = require("./config/redisClint");
+const { connectRedis } = require("./config/redisClient");
 
 const app = express();
 // 1. LOADING CONFIG FROM ENV FILE

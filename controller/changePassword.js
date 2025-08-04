@@ -101,13 +101,13 @@ exports.changePassword = async (req, res) => {
     // 9. Save change password in user and save
     await user.save();
 
-    res.status(200).json({
+    return res.status(200).json({
       success: false,
       message: "Password change successfully",
     });
   } catch (err) {
     console.error("Error changing password:", err);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Internal server error",
     });
