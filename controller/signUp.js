@@ -181,7 +181,7 @@ exports.signUp = async (req, res) => {
     let createUser = await newUser.save();
     // 14. Remove password from response
     let response;
-    if (!createUser) {
+    if (createUser) {
       response = await User.findById(createUser._id).populate();
       response.password = undefined;
     }
@@ -217,8 +217,9 @@ exports.googleSignup = async (req, res) => {
 
     // 7. Check if user already exists
     const existingUser = await User.findOne({ email });
+
     if (existingUser) {
-      return googleLogIn(email, res, existingUser.password);
+      return googleLogIn(email, res);
     }
 
     let password = passwordGenerator();
@@ -310,11 +311,12 @@ exports.googleSignup = async (req, res) => {
       await User.findByIdAndDelete(response._id);
       return res.status(500).json({
         success: false,
-        message: "Fail to send google signup mail ",
+        message:
+          " Google signup failed: Could not send verification email. Your account has been removed. Please try signing up again. ",
       });
     }
 
-    googleLogIn(email, res, response.password);
+    googleLogIn(email, res);
   } catch (error) {
     console.log("Error when google signup", error);
     return res.status(500).json({

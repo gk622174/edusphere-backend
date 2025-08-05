@@ -81,7 +81,7 @@ exports.logIn = async (req, res) => {
       user = JSON.parse(redisUser);
       console.log("Redis Hit - Mongoose Miss");
     } else {
-      user = await User.findOne({ email });
+      user = await User.findOne({ email }).populate("additionalDetails");
       console.log("Mongoose Hit - Redis Miss");
       if (user) {
         user = user.toObject();
@@ -150,49 +150,17 @@ exports.logIn = async (req, res) => {
 };
 
 // google login
-exports.googleLogIn = async (email, res, password) => {
+exports.googleLogIn = async (email, res) => {
   try {
     // 1. check Email,Password Existed
-    if (!email || !password) {
+    if (!email) {
       return res.status(400).json({
         success: false,
-        message: "Email and password are required",
+        message: "Email are required",
       });
     }
 
-    let user;
-    // 1. Check If User Data Is Cached In Redis
-    const redisUser = await redisClient.get(`user:${email}`);
-    if (redisUser) {
-      user = JSON.parse(redisUser);
-      console.log("Redis Hit - Mongoose Miss");
-    } else {
-      user = await User.findOne({ email });
-      console.log("Mongoose Hit - Redis Miss");
-      if (user) {
-        user = user.toObject();
-        await redisClient.setEx(`user:${email}`, 600, JSON.stringify(user));
-      }
-    }
-
-    // 2. If user doesn't exist
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        data: null,
-        message: "User Not Found, Please Signup",
-      });
-    }
-
-    // 3. Compare password with hashed password
-    const isPasswordMatch = await bcrypt.compare(password, user.password);
-    if (!isPasswordMatch) {
-      return res.status(401).json({
-        success: false,
-        data: null,
-        message: "Wrong Password",
-      });
-    }
+    const user = await User.findOne({ email }).populate("additionalDetails");
 
     // 4. Create JWT payload
     const payload = {

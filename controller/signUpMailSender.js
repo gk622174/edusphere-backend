@@ -84,10 +84,10 @@ exports.otpMail = async (req, res) => {
     let emailSent;
     if (!otp) {
       //  Generate new OTP
-      otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
 
       //  Store OTP in Redis (expires in 5 minutes)
-      await redisClient.setEx(`otp:${email}`, 300, otp);
+      await redisClient.setEx(`otp:${email}`, 300, newOtp);
 
       //  Send OTP email
       emailSent = await mailSender(
