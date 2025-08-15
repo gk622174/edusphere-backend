@@ -1,4 +1,4 @@
-const { redisClient } = require("../config/redisClient");
+// const { redisClient } = require("../config/redisClient");
 const User = require("../models/user");
 const Profile = require("../models/profile");
 const hashingPassword = require("../utiles/hashingPassword");
@@ -6,8 +6,10 @@ const isValidEmail = require("../utiles/emailValidator");
 const isStrongPassword = require("../utiles/passwordChecker");
 const passwordGenerator = require("../utiles/passwordGenerator");
 const mailSender = require("../utiles/mailSender");
-const { googleLogIn } = require("../controller/logIn");
+const { googleLogIn } = require("./logIn");
 const { response } = require("express");
+const user = require("../models/user");
+const { getCache } = require("../utiles/memoryRedis");
 
 /**
  * =========================================
@@ -132,8 +134,8 @@ exports.signUp = async (req, res) => {
     }
 
     // 8. OTP verification from Redis
-    const redisOtp = await redisClient.get(`otp:${email}`);
-    if (!redisOtp) {
+    const cacheOtp = getCache(`otp:${email}`);
+    if (!cacheOtp) {
       return res.status(410).json({
         success: false,
         message: "OTP expired or not found",
@@ -141,7 +143,7 @@ exports.signUp = async (req, res) => {
     }
 
     // 9. OTP match check
-    if (otp !== redisOtp) {
+    if (otp !== cacheOtp) {
       return res.status(401).json({
         success: false,
         message: "Invalid OTP",
@@ -179,6 +181,52 @@ exports.signUp = async (req, res) => {
 
     // 13. Save user
     let createUser = await newUser.save();
+
+    const sentEmail = await mailSender(
+      email,
+      "EduSphere - Your Account Has Been Created Successfully",
+      `
+<div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 30px; text-align: center;">
+  <div style="max-width: 550px; margin: auto; background: white; border-radius: 14px; padding: 35px 25px; box-shadow: 0px 6px 18px rgba(0,0,0,0.08);">
+    
+    <div style="margin-bottom: 15px;">
+      <img src="https://res.cloudinary.com/dglgmkgt4/image/upload/v1754124919/eduSphere_fu67gz.png" alt="EduSphere Logo" style="width: 80px;">
+    </div>
+
+    <h2 style="color: #2e7dff; margin-bottom: 10px;">Welcome to EduSphere 🎓</h2>
+
+    <p style="font-size: 15px; color: #555; line-height: 1.6;">
+      Hi <strong>${firstName} ${lastName}</strong>,<br>
+      Your EduSphere account has been created successfully.
+    </p>
+
+    <a href="${process.env.FRONTEND_URL}/login" 
+      style="display: inline-block; background: linear-gradient(135deg, #2e7dff, #1b5dd8); 
+      color: white; padding: 12px 28px; margin-top: 20px; border-radius: 8px; 
+      text-decoration: none; font-weight: bold; font-size: 15px;">
+      Login to EduSphere
+    </a>
+
+    <p style="font-size: 12px; color: #888; margin-top: 20px;">
+      If you did not sign up for EduSphere, please ignore this email.
+    </p>
+  </div>
+
+  <p style="font-size: 11px; color: #aaa; margin-top: 20px;">
+    © ${new Date().getFullYear()} EduSphere. All rights reserved.
+  </p>
+</div>
+`
+    );
+
+    if (!sentEmail) {
+      await User.findByIdAndDelete(createUser._id);
+      return res.status(500).json({
+        success: false,
+        message:
+          " signup failed: Could not send verification email. Your account has been removed. Please try signing up again. ",
+      });
+    }
     // 14. Remove password from response
     let response;
     if (createUser) {
@@ -222,7 +270,7 @@ exports.googleSignup = async (req, res) => {
       return googleLogIn(email, res);
     }
 
-    let password = passwordGenerator();
+    const password = passwordGenerator();
     if (!password) {
       return res.status(500).json({
         success: false,

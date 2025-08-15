@@ -5,7 +5,7 @@ const dotenv = require("dotenv");
 const router = require("./routes/route");
 const dbConnect = require("./config/dataBase");
 const cloudinaryConnect = require("./config/cloudinary");
-const { connectRedis } = require("./config/redisClient");
+// const { connectRedis } = require("./config/redisClient");
 
 const app = express();
 // 1. LOADING CONFIG FROM ENV FILE
@@ -35,7 +35,7 @@ const startServer = async () => {
     // 1a. Connect Cloudinary
     cloudinaryConnect();
     // 2a. Connect Redis
-    await connectRedis();
+    // await connectRedis();
     // 3a. Connect DataBase
     await dbConnect();
     // 4a. Listen Server

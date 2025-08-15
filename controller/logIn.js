@@ -1,8 +1,9 @@
-const { redisClient } = require("../config/redisClient");
+// const { redisClient } = require("../config/redisClient");
 const User = require("../models/user");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const isValidEmail = require("../utiles/emailValidator");
+const { setCache, getCache } = require("../utiles/memoryRedis");
 
 /**
  * =========================================
@@ -76,16 +77,16 @@ exports.logIn = async (req, res) => {
 
     let user;
     // 4. Check If User Data Is Cached In Redis
-    const redisUser = await redisClient.get(`user:${email}`);
-    if (redisUser) {
-      user = JSON.parse(redisUser);
-      console.log("Redis Hit - Mongoose Miss");
+    const cacheUser = getCache(`user:${email}`);
+    if (cacheUser) {
+      user = cacheUser;
+      console.log("Cache Hit - Mongoose Miss");
     } else {
       user = await User.findOne({ email }).populate("additionalDetails");
-      console.log("Mongoose Hit - Redis Miss");
+      console.log("Mongoose Hit - cache Miss");
       if (user) {
         user = user.toObject();
-        await redisClient.setEx(`user:${email}`, 600, JSON.stringify(user));
+        setCache(`user:${email}`, user, 600);
       }
     }
 

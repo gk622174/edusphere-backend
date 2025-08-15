@@ -14,7 +14,6 @@ function isValidEmail(email) {
     // 3. Empty check
     if (email.length === 0) return false;
 
-    // 4. Email regex pattern (RFC 5322 simplified)
     const pattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     // 5. Test and return

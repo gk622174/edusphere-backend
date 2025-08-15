@@ -136,7 +136,7 @@ exports.resetPasswordToken = async (req, res) => {
         <img src="https://res.cloudinary.com/dglgmkgt4/image/upload/v1754124919/eduSphere_fu67gz.png" alt="Lock Icon" style="width: 60px; height: 60px;">
       </div>
 
-      <h1 style="color: #2e7dff; margin-bottom: 10px; font-size: 22px;">Password Reset Request</h1>
+      <h2 style="color: #2e7dff; margin-bottom: 10px; font-size: 22px;">Password Reset Request</h2>
       
       <p style="font-size: 15px; color: #555; line-height: 1.6;">
         You recently requested to reset your password for your <strong>EduSphere</strong> account.
